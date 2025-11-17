@@ -161,7 +161,7 @@ function App() {
 
   // fetch transactions once
   useEffect(() => {
-    fetch('http://localhost:4000/api/transactions')
+    fetch('https://why-finance-wing-server.onrender.com/api/transactions')
       .then((r) => r.json())
       .then(setTransactions)
       .catch(() => {});
@@ -379,14 +379,14 @@ function App() {
         accountId: toId
       };
 
-      const resOut = await fetch('http://localhost:4000/api/transactions', {
+      const resOut = await fetch('https://why-finance-wing-server.onrender.com/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bodyOut)
       });
       const newTxOut = await resOut.json();
 
-      const resIn = await fetch('http://localhost:4000/api/transactions', {
+      const resIn = await fetch('https://why-finance-wing-server.onrender.com/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bodyIn)
@@ -411,7 +411,7 @@ function App() {
 
     if (form.id) {
       const res = await fetch(
-        `http://localhost:4000/api/transactions/${form.id}`,
+        `https://why-finance-wing-server.onrender.com/api/transactions/${form.id}`,
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -423,7 +423,7 @@ function App() {
         prev.map((t) => (t.id === updated.id ? updated : t))
       );
     } else {
-      const res = await fetch('http://localhost:4000/api/transactions', {
+      const res = await fetch('https://why-finance-wing-server.onrender.com/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
@@ -451,7 +451,7 @@ function App() {
   };
 
   const onDeleteTx = async (id) => {
-    await fetch(`http://localhost:4000/api/transactions/${id}`, {
+    await fetch(`https://why-finance-wing-server.onrender.com/api/transactions/${id}`, {
       method: 'DELETE'
     });
     setTransactions((prev) => prev.filter((t) => t.id !== id));
@@ -476,7 +476,7 @@ function App() {
   const sendOtp = async (e) => {
     e.preventDefault();
     if (!authEmail) return;
-    await fetch('http://localhost:4000/api/users/request-otp', {
+    await fetch('https://why-finance-wing-server.onrender.com/api/users/request-otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: authEmail })
@@ -487,7 +487,7 @@ function App() {
   const verifyOtp = async (e) => {
     e.preventDefault();
     if (!authEmail || !authOtp) return;
-    const res = await fetch('http://localhost:4000/api/users/verify-otp', {
+    const res = await fetch('https://why-finance-wing-server.onrender.com/api/users/verify-otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: authEmail, otp: authOtp })
@@ -508,7 +508,7 @@ function App() {
   const saveProfile = async (e) => {
     e.preventDefault();
     if (!user) return;
-    const res = await fetch('http://localhost:4000/api/users/update-profile', {
+    const res = await fetch('https://why-finance-wing-server.onrender.com/api/users/update-profile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: user.email, username: profileUsername })
