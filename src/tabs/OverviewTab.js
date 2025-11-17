@@ -266,6 +266,7 @@ function OverviewTab({
 
   const renderAnnualSummary = () => {
     const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const totalCols = yearCollapsed ? 2 : 1 + months.length + 1; // Categories + (months or 2025) + Total
 
     return (
       <div
@@ -277,7 +278,7 @@ function OverviewTab({
           color: darkMode ? '#e5e7eb' : '#111827'
         }}
       >
-        {/* YEAR HEADER (collapsible) */}
+        {/* YEAR HEADER (click to collapse) */}
         <button
           type="button"
           onClick={() => setYearCollapsed(v => !v)}
@@ -288,14 +289,15 @@ function OverviewTab({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: '4px 4px 10px',
+            padding: '0 4px 10px',
             cursor: 'pointer'
           }}
         >
           <span
             style={{
               fontSize: 18,
-              fontWeight: 700
+              fontWeight: 700,
+              color: darkMode ? '#e5e7eb' : '#111827'
             }}
           >
             2025
@@ -310,7 +312,6 @@ function OverviewTab({
           </span>
         </button>
 
-        {/* TABLE */}
         <div style={{ overflowX: 'auto' }}>
           <table
             style={{
@@ -320,6 +321,28 @@ function OverviewTab({
             }}
           >
             <thead>
+              {/* Row 1: empty A1, 2025 over B..N (or just over collapsed col) */}
+              <tr>
+                <th
+                  style={{
+                    padding: '4px 6px'
+                  }}
+                />
+                <th
+                  colSpan={yearCollapsed ? 1 : months.length + 1}
+                  style={{
+                    padding: '4px 6px',
+                    textAlign: 'center',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: darkMode ? '#e5e7eb' : '#111827'
+                  }}
+                >
+                  2025
+                </th>
+              </tr>
+
+              {/* Row 2: column labels */}
               <tr>
                 <th
                   style={{
@@ -331,29 +354,39 @@ function OverviewTab({
                   Categories
                 </th>
 
-                {/* Month columns only when NOT collapsed */}
-                {!yearCollapsed &&
-                  months.map((m, i) => (
+                {yearCollapsed ? (
+                  // Collapsed: only one numeric column labelled "2025"
+                  <th
+                    style={{
+                      textAlign: 'right',
+                      padding: '4px 6px'
+                    }}
+                  >
+                    2025
+                  </th>
+                ) : (
+                  <>
+                    {months.map((m, i) => (
+                      <th
+                        key={m}
+                        style={{
+                          padding: '4px 6px',
+                          textAlign: 'right'
+                        }}
+                      >
+                        {monthLabels[i]}
+                      </th>
+                    ))}
                     <th
-                      key={m}
                       style={{
-                        padding: '4px 6px',
-                        textAlign: 'right'
+                        textAlign: 'right',
+                        padding: '4px 6px'
                       }}
                     >
-                      {monthLabels[i]}
+                      Total
                     </th>
-                  ))}
-
-                {/* Total column always visible */}
-                <th
-                  style={{
-                    textAlign: 'right',
-                    padding: '4px 6px'
-                  }}
-                >
-                  Total
-                </th>
+                  </>
+                )}
               </tr>
             </thead>
 
@@ -361,7 +394,7 @@ function OverviewTab({
               {/* INCOME SECTION */}
               <tr>
                 <td
-                  colSpan={yearCollapsed ? 2 : 14}
+                  colSpan={totalCols}
                   style={{
                     padding: '6px 6px',
                     fontWeight: 600,
@@ -377,45 +410,60 @@ function OverviewTab({
                 <tr key={cat}>
                   <td style={{ padding: '4px 6px' }}>{cat}</td>
 
-                  {/* Month cells only when NOT collapsed */}
-                  {!yearCollapsed &&
-                    months.map((m) => (
+                  {yearCollapsed ? (
+                    // Collapsed: totals column moves into "Jan" position (first numeric col)
+                    <td
+                      style={{
+                        padding: '4px 6px',
+                        textAlign: 'right',
+                        fontWeight: 600,
+                        color: '#16a34a'
+                      }}
+                    >
+                      {totalForCategory(cat, 'income').toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                      })}
+                    </td>
+                  ) : (
+                    <>
+                      {months.map((m) => (
+                        <td
+                          key={m}
+                          style={{
+                            padding: '4px 6px',
+                            textAlign: 'right',
+                            color: '#22c55e'
+                          }}
+                        >
+                          {sumFor(cat, m, 'income').toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                          })}
+                        </td>
+                      ))}
                       <td
-                        key={m}
                         style={{
                           padding: '4px 6px',
                           textAlign: 'right',
-                          color: '#22c55e'
+                          fontWeight: 600,
+                          color: '#16a34a'
                         }}
                       >
-                        {sumFor(cat, m, 'income').toLocaleString(undefined, {
+                        {totalForCategory(cat, 'income').toLocaleString(undefined, {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2
                         })}
                       </td>
-                    ))}
-
-                  {/* Total */}
-                  <td
-                    style={{
-                      padding: '4px 6px',
-                      textAlign: 'right',
-                      fontWeight: 600,
-                      color: '#16a34a'
-                    }}
-                  >
-                    {totalForCategory(cat, 'income').toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2
-                    })}
-                  </td>
+                    </>
+                  )}
                 </tr>
               ))}
 
               {/* EXPENSE SECTION */}
               <tr>
                 <td
-                  colSpan={yearCollapsed ? 2 : 14}
+                  colSpan={totalCols}
                   style={{
                     padding: '10px 6px 0',
                     fontWeight: 600,
@@ -431,38 +479,52 @@ function OverviewTab({
                 <tr key={cat}>
                   <td style={{ padding: '4px 6px' }}>{cat}</td>
 
-                  {/* Month cells only when NOT collapsed */}
-                  {!yearCollapsed &&
-                    months.map((m) => (
+                  {yearCollapsed ? (
+                    <td
+                      style={{
+                        padding: '4px 6px',
+                        textAlign: 'right',
+                        fontWeight: 600,
+                        color: '#dc2626'
+                      }}
+                    >
+                      {totalForCategory(cat, 'expense').toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                      })}
+                    </td>
+                  ) : (
+                    <>
+                      {months.map((m) => (
+                        <td
+                          key={m}
+                          style={{
+                            padding: '4px 6px',
+                            textAlign: 'right',
+                            color: '#fb923c'
+                          }}
+                        >
+                          {sumFor(cat, m, 'expense').toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                          })}
+                        </td>
+                      ))}
                       <td
-                        key={m}
                         style={{
                           padding: '4px 6px',
                           textAlign: 'right',
-                          color: '#fb923c'
+                          fontWeight: 600,
+                          color: '#dc2626'
                         }}
                       >
-                        {sumFor(cat, m, 'expense').toLocaleString(undefined, {
+                        {totalForCategory(cat, 'expense').toLocaleString(undefined, {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2
                         })}
                       </td>
-                    ))}
-
-                  {/* Total */}
-                  <td
-                    style={{
-                      padding: '4px 6px',
-                      textAlign: 'right',
-                      fontWeight: 600,
-                      color: '#dc2626'
-                    }}
-                  >
-                    {totalForCategory(cat, 'expense').toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2
-                    })}
-                  </td>
+                    </>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -471,6 +533,7 @@ function OverviewTab({
       </div>
     );
   };
+
 
 
   return (
