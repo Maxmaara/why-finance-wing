@@ -1,5 +1,7 @@
 // /desktop/budget-app/client/src/tabs/OverviewTab.js
 
+import { useState } from 'react';
+
 function OverviewTab({
   darkMode,
   mustard,
@@ -24,8 +26,10 @@ function OverviewTab({
   const cardDark = 'rgba(15,23,42,0.98)';
   const cardLight = '#ffffff';
 
+  const [yearCollapsed, setYearCollapsed] = useState(false);
+
   // build annual summary 2025
-  const months = ['01','02','03','04','05','06','07','08','09','10','11','12'];
+  const months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
 
   const sumFor = (cat, month, type) => {
     return transactions
@@ -116,13 +120,13 @@ function OverviewTab({
                     color: acc.net >= 0 ? '#16a34a' : '#dc2626'
                   }}
                 >
-                  {acc.net.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})} {acc.currency}
+                  {acc.net.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {acc.currency}
                 </div>
               </div>
 
               <div style={{ flex: 1, textAlign: 'right', fontSize: 11, color: darkMode ? '#9ca3af' : '#6b7280' }}>
-                <div>In: <span style={{ color: '#22c55e' }}>{acc.income.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>
-                <div>Out: <span style={{ color: '#fb923c' }}>{acc.expense.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>
+                <div>In: <span style={{ color: '#22c55e' }}>{acc.income.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+                <div>Out: <span style={{ color: '#fb923c' }}>{acc.expense.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
               </div>
 
               {accountEditMode && (
@@ -221,13 +225,13 @@ function OverviewTab({
 
               <div style={{ flex: 1, textAlign: 'center' }}>
                 <div style={{ fontWeight: 700, fontSize: 16, color: acc.net >= 0 ? '#16a34a' : '#dc2626' }}>
-                  {acc.net.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})} {acc.currency}
+                  {acc.net.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {acc.currency}
                 </div>
               </div>
 
               <div style={{ flex: 1, textAlign: 'right', fontSize: 11, color: darkMode ? '#9ca3af' : '#6b7280' }}>
-                <div>In: <span style={{ color: '#22c55e' }}>{acc.income.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>
-                <div>Out: <span style={{ color: '#fb923c' }}>{acc.expense.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>
+                <div>In: <span style={{ color: '#22c55e' }}>{acc.income.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+                <div>Out: <span style={{ color: '#fb923c' }}>{acc.expense.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
               </div>
 
               {savingsEditMode && (
@@ -260,102 +264,235 @@ function OverviewTab({
     </div>
   );
 
-  const renderAnnualSummary = () => (
-    <div
-      style={{
-        background: darkMode ? cardDark : '#ffffff',
-        borderRadius: 18,
-        padding: 16,
-        border: darkMode ? '1px solid rgba(55,65,81,0.9)' : '1px solid #e5e7eb',
-        color: darkMode ? '#e5e7eb' : '#111827'
-      }}
-    >
-      {/* YEAR LABEL */}
-      <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: 20, fontWeight: 700, marginBottom: 12 }}>
-        2025
-      </div>
+  const renderAnnualSummary = () => {
+    const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-      {/* TABLE */}
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-          <thead>
-            <tr>
-              <th style={{ textAlign: 'left', padding: '4px 6px', fontSize: 12 }}>Categories</th>
-              {months.map((m, i) => (
-                <th key={m} style={{ padding: '4px 6px', textAlign: 'right' }}>
-                  {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][i]}
+    return (
+      <div
+        style={{
+          background: darkMode ? cardDark : '#ffffff',
+          borderRadius: 18,
+          padding: 16,
+          border: darkMode ? '1px solid rgba(55,65,81,0.9)' : '1px solid #e5e7eb',
+          color: darkMode ? '#e5e7eb' : '#111827'
+        }}
+      >
+        {/* YEAR HEADER (collapsible) */}
+        <button
+          type="button"
+          onClick={() => setYearCollapsed(v => !v)}
+          style={{
+            width: '100%',
+            border: 'none',
+            background: 'transparent',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '4px 4px 10px',
+            cursor: 'pointer'
+          }}
+        >
+          <span
+            style={{
+              fontSize: 18,
+              fontWeight: 700
+            }}
+          >
+            2025
+          </span>
+          <span
+            style={{
+              fontSize: 12,
+              color: darkMode ? '#9ca3af' : '#6b7280'
+            }}
+          >
+            {yearCollapsed ? 'Show months ▾' : 'Hide months ▴'}
+          </span>
+        </button>
+
+        {/* TABLE */}
+        <div style={{ overflowX: 'auto' }}>
+          <table
+            style={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              fontSize: 11
+            }}
+          >
+            <thead>
+              <tr>
+                <th
+                  style={{
+                    textAlign: 'left',
+                    padding: '4px 6px',
+                    fontSize: 12
+                  }}
+                >
+                  Categories
                 </th>
+
+                {/* Month columns only when NOT collapsed */}
+                {!yearCollapsed &&
+                  months.map((m, i) => (
+                    <th
+                      key={m}
+                      style={{
+                        padding: '4px 6px',
+                        textAlign: 'right'
+                      }}
+                    >
+                      {monthLabels[i]}
+                    </th>
+                  ))}
+
+                {/* Total column always visible */}
+                <th
+                  style={{
+                    textAlign: 'right',
+                    padding: '4px 6px'
+                  }}
+                >
+                  Total
+                </th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {/* INCOME SECTION */}
+              <tr>
+                <td
+                  colSpan={yearCollapsed ? 2 : 14}
+                  style={{
+                    padding: '6px 6px',
+                    fontWeight: 600,
+                    fontSize: 12,
+                    color: '#22c55e'
+                  }}
+                >
+                  Income Categories
+                </td>
+              </tr>
+
+              {incomeCategories.map((cat) => (
+                <tr key={cat}>
+                  <td style={{ padding: '4px 6px' }}>{cat}</td>
+
+                  {/* Month cells only when NOT collapsed */}
+                  {!yearCollapsed &&
+                    months.map((m) => (
+                      <td
+                        key={m}
+                        style={{
+                          padding: '4px 6px',
+                          textAlign: 'right',
+                          color: '#22c55e'
+                        }}
+                      >
+                        {sumFor(cat, m, 'income').toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2
+                        })}
+                      </td>
+                    ))}
+
+                  {/* Total */}
+                  <td
+                    style={{
+                      padding: '4px 6px',
+                      textAlign: 'right',
+                      fontWeight: 600,
+                      color: '#16a34a'
+                    }}
+                  >
+                    {totalForCategory(cat, 'income').toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2
+                    })}
+                  </td>
+                </tr>
               ))}
-              <th style={{ textAlign: 'right', padding: '4px 6px' }}>Total</th>
-            </tr>
-          </thead>
 
-          <tbody>
-            {/* INCOME SECTION */}
-            <tr>
-              <td colSpan={14} style={{ padding: '6px 6px', fontWeight: 600, fontSize: 12, color: '#22c55e' }}>
-                Income Categories
-              </td>
-            </tr>
-
-            {incomeCategories.map(cat => (
-              <tr key={cat}>
-                <td style={{ padding: '4px 6px' }}>{cat}</td>
-                {months.map(m => (
-                  <td key={m} style={{ padding: '4px 6px', textAlign: 'right', color: '#22c55e' }}>
-                    {sumFor(cat,m,'income').toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
-                  </td>
-                ))}
-                <td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 600, color: '#16a34a' }}>
-                  {totalForCategory(cat,'income').toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
+              {/* EXPENSE SECTION */}
+              <tr>
+                <td
+                  colSpan={yearCollapsed ? 2 : 14}
+                  style={{
+                    padding: '10px 6px 0',
+                    fontWeight: 600,
+                    fontSize: 12,
+                    color: '#f97316'
+                  }}
+                >
+                  Expense Categories
                 </td>
               </tr>
-            ))}
 
-            {/* EXPENSE SECTION */}
-            <tr>
-              <td colSpan={14} style={{ padding: '10px 6px 0', fontWeight: 600, fontSize: 12, color: '#f97316' }}>
-                Expense Categories
-              </td>
-            </tr>
+              {expenseCategories.map((cat) => (
+                <tr key={cat}>
+                  <td style={{ padding: '4px 6px' }}>{cat}</td>
 
-            {expenseCategories.map(cat => (
-              <tr key={cat}>
-                <td style={{ padding: '4px 6px' }}>{cat}</td>
-                {months.map(m => (
-                  <td key={m} style={{ padding: '4px 6px', textAlign: 'right', color: '#fb923c' }}>
-                    {sumFor(cat,m,'expense').toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
+                  {/* Month cells only when NOT collapsed */}
+                  {!yearCollapsed &&
+                    months.map((m) => (
+                      <td
+                        key={m}
+                        style={{
+                          padding: '4px 6px',
+                          textAlign: 'right',
+                          color: '#fb923c'
+                        }}
+                      >
+                        {sumFor(cat, m, 'expense').toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2
+                        })}
+                      </td>
+                    ))}
+
+                  {/* Total */}
+                  <td
+                    style={{
+                      padding: '4px 6px',
+                      textAlign: 'right',
+                      fontWeight: 600,
+                      color: '#dc2626'
+                    }}
+                  >
+                    {totalForCategory(cat, 'expense').toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2
+                    })}
                   </td>
-                ))}
-                <td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 600, color: '#dc2626' }}>
-                  {totalForCategory(cat,'expense').toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
+
 
   return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr)',
-        gap: 20
-      }}
-    >
-      <div>
-        {renderBalancesCard()}
-        {renderAnnualSummary()}
+    <>
+      {/* Top: balances + savings side by side */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr)',
+          gap: 20,
+          marginBottom: 16
+        }}
+      >
+        <div>{renderBalancesCard()}</div>
+        <div>{renderSavingsCard()}</div>
       </div>
 
-      <div>
-        {renderSavingsCard()}
-      </div>
-    </div>
+      {/* Bottom: annual summary full width */}
+      {renderAnnualSummary()}
+    </>
   );
+
 }
 
 export default OverviewTab;
