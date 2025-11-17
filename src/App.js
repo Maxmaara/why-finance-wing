@@ -999,7 +999,7 @@ function App() {
                     fontWeight: 600
                   }}
                 >
-                  Budget Tracker test
+                  Budget Tracker
                 </div>
                 <div
                   style={{
