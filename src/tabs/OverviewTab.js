@@ -265,8 +265,12 @@ function OverviewTab({
   );
 
   const renderAnnualSummary = () => {
-    const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const totalCols = yearCollapsed ? 2 : 1 + months.length + 1; // Categories + (months or 2025) + Total
+    const monthLabels = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+
+    const headerColSpan = yearCollapsed ? 2 : months.length + 2; // Categories + (months or 2025) + maybe 2025 total
 
     return (
       <div
@@ -274,11 +278,13 @@ function OverviewTab({
           background: darkMode ? cardDark : '#ffffff',
           borderRadius: 18,
           padding: 16,
-          border: darkMode ? '1px solid rgba(55,65,81,0.9)' : '1px solid #e5e7eb',
+          border: darkMode
+            ? '1px solid rgba(55,65,81,0.9)'
+            : '1px solid #e5e7eb',
           color: darkMode ? '#e5e7eb' : '#111827'
         }}
       >
-        {/* YEAR HEADER (click to collapse) */}
+        {/* YEAR TOGGLE */}
         <button
           type="button"
           onClick={() => setYearCollapsed(v => !v)}
@@ -321,28 +327,7 @@ function OverviewTab({
             }}
           >
             <thead>
-              {/* Row 1: empty A1, 2025 over B..N (or just over collapsed col) */}
-              <tr>
-                <th
-                  style={{
-                    padding: '4px 6px'
-                  }}
-                />
-                <th
-                  colSpan={yearCollapsed ? 1 : months.length + 1}
-                  style={{
-                    padding: '4px 6px',
-                    textAlign: 'center',
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: darkMode ? '#e5e7eb' : '#111827'
-                  }}
-                >
-                  2025
-                </th>
-              </tr>
-
-              {/* Row 2: column labels */}
+              {/* ONE header row only, Google-Sheets style */}
               <tr>
                 <th
                   style={{
@@ -355,11 +340,12 @@ function OverviewTab({
                 </th>
 
                 {yearCollapsed ? (
-                  // Collapsed: only one numeric column labelled "2025"
+                  // collapsed: only one numeric column, labelled 2025, right next to Categories
                   <th
                     style={{
                       textAlign: 'right',
-                      padding: '4px 6px'
+                      padding: '4px 6px',
+                      fontSize: 12
                     }}
                   >
                     2025
@@ -380,10 +366,11 @@ function OverviewTab({
                     <th
                       style={{
                         textAlign: 'right',
-                        padding: '4px 6px'
+                        padding: '4px 6px',
+                        fontSize: 12
                       }}
                     >
-                      Total
+                      2025
                     </th>
                   </>
                 )}
@@ -391,10 +378,10 @@ function OverviewTab({
             </thead>
 
             <tbody>
-              {/* INCOME SECTION */}
+              {/* INCOME SECTION LABEL */}
               <tr>
                 <td
-                  colSpan={totalCols}
+                  colSpan={headerColSpan}
                   style={{
                     padding: '6px 6px',
                     fontWeight: 600,
@@ -411,7 +398,7 @@ function OverviewTab({
                   <td style={{ padding: '4px 6px' }}>{cat}</td>
 
                   {yearCollapsed ? (
-                    // Collapsed: totals column moves into "Jan" position (first numeric col)
+                    // collapsed: only year total, in the first numeric column
                     <td
                       style={{
                         padding: '4px 6px',
@@ -460,10 +447,10 @@ function OverviewTab({
                 </tr>
               ))}
 
-              {/* EXPENSE SECTION */}
+              {/* EXPENSE SECTION LABEL */}
               <tr>
                 <td
-                  colSpan={totalCols}
+                  colSpan={headerColSpan}
                   style={{
                     padding: '10px 6px 0',
                     fontWeight: 600,
@@ -533,6 +520,7 @@ function OverviewTab({
       </div>
     );
   };
+
 
 
 
