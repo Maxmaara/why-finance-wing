@@ -306,7 +306,7 @@ function OverviewTab({
               color: darkMode ? '#e5e7eb' : '#111827'
             }}
           >
-            2025
+            Summary
           </span>
           <span
             style={{
