@@ -8,6 +8,16 @@ import InvestmentsTab from './tabs/InvestmentsTab';
 import LoansTab from './tabs/LoansTab';
 import SplitTab from './tabs/SplitTab';
 
+const API_BASE = 'https://why-finance-wing-server.onrender.com';
+
+const DEFAULT_ACCOUNTS = [
+  { id: 'acc-bank-1', name: 'Main Bank', currency: 'AED', type: 'bank', mandatory: true },
+  { id: 'acc-cash', name: 'Cash', currency: 'AED', type: 'cash', mandatory: true }
+];
+
+const DEFAULT_INCOME_CATEGORIES = ['Salary', 'Bonus', 'Business', 'Other income'];
+const DEFAULT_EXPENSE_CATEGORIES = ['Rent', 'Groceries', 'Utilities', 'Transport', 'Other expense'];
+
 function App() {
   const mustard = '#f5b300';
   const darkBg = '#020617';
@@ -30,18 +40,36 @@ function App() {
   // plan modal
   const [showPlanModal, setShowPlanModal] = useState(false);
 
-  // main accounts
+  // load user from localStorage (NO dev user)
+  const [user, setUser] = useState(() => {
+    const raw = window.localStorage.getItem('why_user');
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        return {
+          ...parsed,
+          plan: parsed.plan || 'basic'
+        };
+      } catch {}
+    }
+    return null;
+  });
+
+  const plan = user?.plan || 'basic';
+  const isProOrEnterprise = plan === 'pro' || plan === 'enterprise';
+  const advancedTabs = ['zakath', 'investments', 'loans', 'split'];
+  const isAdvancedActive = advancedTabs.includes(activeTab);
+  const canAccessActiveTab = !isAdvancedActive || isProOrEnterprise;
+
+  // main accounts (start from localStorage defaults, then override from user if logged in)
   const [accounts, setAccounts] = useState(() => {
     const stored = window.localStorage.getItem('why_accounts');
     if (stored) {
       try {
         return JSON.parse(stored);
-      } catch { }
+      } catch {}
     }
-    return [
-      { id: 'acc-bank-1', name: 'Main Bank', currency: 'AED', type: 'bank', mandatory: true },
-      { id: 'acc-cash', name: 'Cash', currency: 'AED', type: 'cash', mandatory: true }
-    ];
+    return [...DEFAULT_ACCOUNTS];
   });
 
   // savings accounts
@@ -50,18 +78,10 @@ function App() {
     if (stored) {
       try {
         return JSON.parse(stored);
-      } catch { }
+      } catch {}
     }
     return [];
   });
-
-  useEffect(() => {
-    window.localStorage.setItem('why_accounts', JSON.stringify(accounts));
-  }, [accounts]);
-
-  useEffect(() => {
-    window.localStorage.setItem('why_savings_accounts', JSON.stringify(savingsAccounts));
-  }, [savingsAccounts]);
 
   // categories
   const [incomeCategories, setIncomeCategories] = useState(() => {
@@ -69,9 +89,9 @@ function App() {
     if (stored) {
       try {
         return JSON.parse(stored);
-      } catch { }
+      } catch {}
     }
-    return ['Salary', 'Bonus', 'Business', 'Other income'];
+    return [...DEFAULT_INCOME_CATEGORIES];
   });
 
   const [expenseCategories, setExpenseCategories] = useState(() => {
@@ -79,24 +99,58 @@ function App() {
     if (stored) {
       try {
         return JSON.parse(stored);
-      } catch { }
+      } catch {}
     }
-    return ['Rent', 'Groceries', 'Utilities', 'Transport', 'Other expense'];
+    return [...DEFAULT_EXPENSE_CATEGORIES];
   });
 
+  // when user changes (login), override local accounts/categories from user profile
   useEffect(() => {
-    window.localStorage.setItem('why_income_categories', JSON.stringify(incomeCategories));
-  }, [incomeCategories]);
+    if (!user) return;
+    if (user.accounts && Array.isArray(user.accounts) && user.accounts.length > 0) {
+      setAccounts(user.accounts);
+    }
+    if (user.savingsAccounts && Array.isArray(user.savingsAccounts)) {
+      setSavingsAccounts(user.savingsAccounts);
+    }
+    if (user.incomeCategories && Array.isArray(user.incomeCategories)) {
+      setIncomeCategories(user.incomeCategories);
+    }
+    if (user.expenseCategories && Array.isArray(user.expenseCategories)) {
+      setExpenseCategories(user.expenseCategories);
+    }
+  }, [user]);
+
+  // keep localStorage for guest mode
+  useEffect(() => {
+    if (!user) {
+      window.localStorage.setItem('why_accounts', JSON.stringify(accounts));
+    }
+  }, [accounts, user]);
 
   useEffect(() => {
-    window.localStorage.setItem('why_expense_categories', JSON.stringify(expenseCategories));
-  }, [expenseCategories]);
+    if (!user) {
+      window.localStorage.setItem('why_savings_accounts', JSON.stringify(savingsAccounts));
+    }
+  }, [savingsAccounts, user]);
+
+  useEffect(() => {
+    if (!user) {
+      window.localStorage.setItem('why_income_categories', JSON.stringify(incomeCategories));
+    }
+  }, [incomeCategories, user]);
+
+  useEffect(() => {
+    if (!user) {
+      window.localStorage.setItem('why_expense_categories', JSON.stringify(expenseCategories));
+    }
+  }, [expenseCategories, user]);
 
   // transactions
   const [transactions, setTransactions] = useState([]);
   const [collapsedMonths, setCollapsedMonths] = useState({});
 
-  // transaction form (NOW USED ONLY IN TransactionsTab)
+  // transaction form
   const [form, setForm] = useState({
     id: null,
     date: '',
@@ -117,25 +171,6 @@ function App() {
     return () => clearTimeout(t);
   }, []);
 
-  // load user from localStorage (NO MORE DEV USER)
-  const [user, setUser] = useState(() => {
-    const raw = window.localStorage.getItem('why_user');
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw);
-        return { ...parsed, plan: parsed.plan || 'basic' };
-      } catch { }
-    }
-    return null; // ← no auto-login, OTP required
-  });
-
-
-  const plan = user?.plan || 'basic';
-  const isProOrEnterprise = plan === 'pro' || plan === 'enterprise';
-  const advancedTabs = ['zakath', 'investments', 'loans', 'split'];
-  const isAdvancedActive = advancedTabs.includes(activeTab);
-  const canAccessActiveTab = !isAdvancedActive || isProOrEnterprise;
-
   // If user is on Basic and currently viewing a locked tab, push back to overview
   useEffect(() => {
     if (!isProOrEnterprise && advancedTabs.includes(activeTab)) {
@@ -151,15 +186,34 @@ function App() {
       return;
     }
 
-    fetch('https://why-finance-wing-server.onrender.com/api/transactions', {
+    fetch(`${API_BASE}/api/transactions`, {
       headers: {
         'x-user-id': user.id
       }
     })
       .then((r) => r.json())
       .then(setTransactions)
-      .catch(() => { });
+      .catch(() => {});
   }, [user]);
+
+  // helper to sync user profile (categories/accounts) to backend
+  const syncUserProfile = async (partial) => {
+    if (!user) return;
+    try {
+      const r = await fetch(`${API_BASE}/api/users/update-profile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user.email, ...partial })
+      });
+      if (!r.ok) return;
+      const updated = await r.json();
+      const normalized = { ...updated, plan: updated.plan || 'basic' };
+      setUser(normalized);
+      window.localStorage.setItem('why_user', JSON.stringify(normalized));
+    } catch (err) {
+      console.error('Profile sync error', err);
+    }
+  };
 
   // derived balances
   const accountBalances = accounts.map((acc) => {
@@ -197,8 +251,8 @@ function App() {
     const name = window.prompt('Account name?');
     if (!name) return;
     const currency = window.prompt('Currency?') || 'AED';
-    setAccounts((prev) => [
-      ...prev,
+    const newAccounts = [
+      ...accounts,
       {
         id: 'acc-' + Date.now(),
         name: name.trim(),
@@ -206,20 +260,22 @@ function App() {
         type: 'bank',
         mandatory: false
       }
-    ]);
+    ];
+    setAccounts(newAccounts);
+    syncUserProfile({ accounts: newAccounts });
   };
 
   const onEditAccount = (acc) => {
     const newName = window.prompt('New account name', acc.name);
     if (!newName) return;
     const newCurr = window.prompt('Currency', acc.currency) || acc.currency;
-    setAccounts((prev) =>
-      prev.map((a) =>
-        a.id === acc.id
-          ? { ...a, name: newName.trim(), currency: newCurr.trim().toUpperCase() }
-          : a
-      )
+    const newAccounts = accounts.map((a) =>
+      a.id === acc.id
+        ? { ...a, name: newName.trim(), currency: newCurr.trim().toUpperCase() }
+        : a
     );
+    setAccounts(newAccounts);
+    syncUserProfile({ accounts: newAccounts });
   };
 
   const onDeleteAccount = (acc) => {
@@ -229,7 +285,9 @@ function App() {
       return alert('At least one bank must remain.');
     }
     if (!window.confirm(`Delete account "${acc.name}"?`)) return;
-    setAccounts((prev) => prev.filter((a) => a.id !== acc.id));
+    const newAccounts = accounts.filter((a) => a.id !== acc.id);
+    setAccounts(newAccounts);
+    syncUserProfile({ accounts: newAccounts });
   };
 
   // savings
@@ -237,8 +295,8 @@ function App() {
     const name = window.prompt('Savings name?');
     if (!name) return;
     const currency = window.prompt('Currency?') || 'AED';
-    setSavingsAccounts((prev) => [
-      ...prev,
+    const newSavings = [
+      ...savingsAccounts,
       {
         id: 'sav-' + Date.now(),
         name: name.trim(),
@@ -246,44 +304,62 @@ function App() {
         type: 'savings',
         mandatory: false
       }
-    ]);
+    ];
+    setSavingsAccounts(newSavings);
+    syncUserProfile({ savingsAccounts: newSavings });
   };
 
   const onEditSavings = (acc) => {
     const newName = window.prompt('New savings name', acc.name);
     if (!newName) return;
     const newCurr = window.prompt('Currency', acc.currency) || acc.currency;
-    setSavingsAccounts((prev) =>
-      prev.map((a) =>
-        a.id === acc.id
-          ? { ...a, name: newName.trim(), currency: newCurr.trim().toUpperCase() }
-          : a
-      )
+    const newSavings = savingsAccounts.map((a) =>
+      a.id === acc.id
+        ? { ...a, name: newName.trim(), currency: newCurr.trim().toUpperCase() }
+        : a
     );
+    setSavingsAccounts(newSavings);
+    syncUserProfile({ savingsAccounts: newSavings });
   };
 
   const onDeleteSavings = (acc) => {
     if (!window.confirm(`Delete savings "${acc.name}"?`)) return;
-    setSavingsAccounts((prev) => prev.filter((a) => a.id !== acc.id));
+    const newSavings = savingsAccounts.filter((a) => a.id !== acc.id);
+    setSavingsAccounts(newSavings);
+    syncUserProfile({ savingsAccounts: newSavings });
   };
 
   // categories
   const addCategory = (type) => {
     const name = window.prompt('New category?');
     if (!name) return;
+    const trimmed = name.trim();
+    if (!trimmed) return;
+
     if (type === 'income') {
-      if (incomeCategories.includes(name.trim())) return;
-      setIncomeCategories((prev) => [...prev, name.trim()]);
+      if (incomeCategories.includes(trimmed)) return;
+      const newCats = [...incomeCategories, trimmed];
+      setIncomeCategories(newCats);
+      syncUserProfile({ incomeCategories: newCats });
     } else {
-      if (expenseCategories.includes(name.trim())) return;
-      setExpenseCategories((prev) => [...prev, name.trim()]);
+      if (expenseCategories.includes(trimmed)) return;
+      const newCats = [...expenseCategories, trimmed];
+      setExpenseCategories(newCats);
+      syncUserProfile({ expenseCategories: newCats });
     }
   };
 
   const removeCategory = (cat, type) => {
     if (!window.confirm(`Remove category "${cat}"?`)) return;
-    if (type === 'income') setIncomeCategories((prev) => prev.filter((c) => c !== cat));
-    else setExpenseCategories((prev) => prev.filter((c) => c !== cat));
+    if (type === 'income') {
+      const newCats = incomeCategories.filter((c) => c !== cat);
+      setIncomeCategories(newCats);
+      syncUserProfile({ incomeCategories: newCats });
+    } else {
+      const newCats = expenseCategories.filter((c) => c !== cat);
+      setExpenseCategories(newCats);
+      syncUserProfile({ expenseCategories: newCats });
+    }
   };
 
   // transactions CRUD
@@ -338,30 +414,24 @@ function App() {
         accountId: toId
       };
 
-      const r1 = await fetch(
-        'https://why-finance-wing-server.onrender.com/api/transactions',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-user-id': user.id
-          },
-          body: JSON.stringify(out)
-        }
-      );
+      const r1 = await fetch(`${API_BASE}/api/transactions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user.id
+        },
+        body: JSON.stringify(out)
+      });
       const newOut = await r1.json();
 
-      const r2 = await fetch(
-        'https://why-finance-wing-server.onrender.com/api/transactions',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-user-id': user.id
-          },
-          body: JSON.stringify(inc)
-        }
-      );
+      const r2 = await fetch(`${API_BASE}/api/transactions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user.id
+        },
+        body: JSON.stringify(inc)
+      });
       const newIn = await r2.json();
 
       setTransactions((prev) => [...prev, newOut, newIn]);
@@ -381,31 +451,25 @@ function App() {
     };
 
     if (form.id) {
-      const r = await fetch(
-        `https://why-finance-wing-server.onrender.com/api/transactions/${form.id}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-user-id': user.id
-          },
-          body: JSON.stringify(body)
-        }
-      );
+      const r = await fetch(`${API_BASE}/api/transactions/${form.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user.id
+        },
+        body: JSON.stringify(body)
+      });
       const updated = await r.json();
-      setTransactions((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+      setTransactions((prev) => prev.map((t) => (t._id === updated._id ? updated : t)));
     } else {
-      const r = await fetch(
-        'https://why-finance-wing-server.onrender.com/api/transactions',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-user-id': user.id
-          },
-          body: JSON.stringify(body)
-        }
-      );
+      const r = await fetch(`${API_BASE}/api/transactions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user.id
+        },
+        body: JSON.stringify(body)
+      });
       const newTx = await r.json();
       setTransactions((prev) => [...prev, newTx]);
     }
@@ -414,9 +478,9 @@ function App() {
   };
 
   const onEditTx = (tx) => {
-    setActiveTab('transactions'); // now edit inside transactions tab
+    setActiveTab('transactions');
     setForm({
-      id: tx.id,
+      id: tx._id || tx.id,
       date: tx.date || '',
       type: tx.type,
       category: tx.category || '',
@@ -433,13 +497,13 @@ function App() {
       alert('Please login first.');
       return;
     }
-    await fetch(`https://why-finance-wing-server.onrender.com/api/transactions/${id}`, {
+    await fetch(`${API_BASE}/api/transactions/${id}`, {
       method: 'DELETE',
       headers: {
         'x-user-id': user.id
       }
     });
-    setTransactions((prev) => prev.filter((t) => t.id !== id));
+    setTransactions((prev) => prev.filter((t) => (t._id || t.id) !== id));
   };
 
   const toggleMonthCollapse = (monthKey) => {
@@ -458,7 +522,7 @@ function App() {
   const sendOtp = async (e) => {
     e.preventDefault();
     if (!authEmail) return;
-    await fetch('https://why-finance-wing-server.onrender.com/api/users/request-otp', {
+    await fetch(`${API_BASE}/api/users/request-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: authEmail })
@@ -469,19 +533,21 @@ function App() {
   const verifyOtp = async (e) => {
     e.preventDefault();
     if (!authEmail || !authOtp) return;
-    const r = await fetch(
-      'https://why-finance-wing-server.onrender.com/api/users/verify-otp',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: authEmail, otp: authOtp })
-      }
-    );
+    const r = await fetch(`${API_BASE}/api/users/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: authEmail, otp: authOtp })
+    });
     if (!r.ok) return;
     const u = await r.json();
     const normalized = { ...u, plan: u.plan || 'basic' };
     setUser(normalized);
     window.localStorage.setItem('why_user', JSON.stringify(normalized));
+    // pull profile info into state
+    if (normalized.accounts) setAccounts(normalized.accounts);
+    if (normalized.savingsAccounts) setSavingsAccounts(normalized.savingsAccounts);
+    if (normalized.incomeCategories) setIncomeCategories(normalized.incomeCategories);
+    if (normalized.expenseCategories) setExpenseCategories(normalized.expenseCategories);
     setShowAuthModal(false);
   };
 
@@ -493,20 +559,7 @@ function App() {
 
   const saveProfile = async (e) => {
     e.preventDefault();
-    if (!user) return;
-    const r = await fetch(
-      'https://why-finance-wing-server.onrender.com/api/users/update-profile',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: user.email, username: profileUsername })
-      }
-    );
-    if (!r.ok) return;
-    const updated = await r.json();
-    const normalized = { ...updated, plan: updated.plan || 'basic' };
-    setUser(normalized);
-    window.localStorage.setItem('why_user', JSON.stringify(normalized));
+    // username not really used now; just close
     setShowProfileModal(false);
   };
 
@@ -515,6 +568,12 @@ function App() {
     window.localStorage.removeItem('why_user');
     setShowProfileMenu(false);
     setTransactions([]);
+    // reset to defaults for guest
+    setAccounts([...DEFAULT_ACCOUNTS]);
+    setSavingsAccounts([]);
+    setIncomeCategories([...DEFAULT_INCOME_CATEGORIES]);
+    setExpenseCategories([...DEFAULT_EXPENSE_CATEGORIES]);
+    setActiveTab('overview');
   };
 
   const handleSelectPlan = async (planId) => {
@@ -523,24 +582,12 @@ function App() {
       return;
     }
 
-    // Dev user: just update locally
-    if (user.id === 'dev-user') {
-      const updated = { ...user, plan: planId, planSince: Date.now() };
-      setUser(updated);
-      window.localStorage.setItem('why_user', JSON.stringify(updated));
-      setShowPlanModal(false);
-      return;
-    }
-
     try {
-      const res = await fetch(
-        'https://why-finance-wing-server.onrender.com/api/users/select-plan',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: user.email, plan: planId })
-        }
-      );
+      const res = await fetch(`${API_BASE}/api/users/select-plan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user.email, plan: planId })
+      });
       if (!res.ok) {
         alert('Could not update plan. Please try again.');
         return;
@@ -571,8 +618,8 @@ function App() {
     plan === 'basic'
       ? 'Basic · Free'
       : plan === 'pro'
-        ? 'Pro · $4.99/mo'
-        : 'Enterprise · Custom';
+      ? 'Pro · $4.99/mo'
+      : 'Enterprise · Custom';
 
   // loading screen
   if (loading) {
@@ -649,10 +696,11 @@ function App() {
     <>
       <style>{`
         body {
-          background: ${darkMode
-          ? 'radial-gradient(circle at top, #0f172a 0, #020617 45%, #000 100%)'
-          : 'radial-gradient(circle at top, #fef3c7 0, #f9fafb 45%, #e5e7eb 100%)'
-        };
+          background: ${
+            darkMode
+              ? 'radial-gradient(circle at top, #0f172a 0, #020617 45%, #000 100%)'
+              : 'radial-gradient(circle at top, #fef3c7 0, #f9fafb 45%, #e5e7eb 100%)'
+          };
         }
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 999px; }
@@ -1066,10 +1114,10 @@ function App() {
                           ? '#4b5563'
                           : '#9ca3af'
                         : isActive
-                          ? '#111827'
-                          : darkMode
-                            ? '#9ca3af'
-                            : '#6b7280',
+                        ? '#111827'
+                        : darkMode
+                        ? '#9ca3af'
+                        : '#6b7280',
                       boxShadow:
                         isActive && !isLocked
                           ? '0 10px 20px rgba(249,115,22,0.45)'
@@ -1566,8 +1614,8 @@ function App() {
                     plan === 'basic'
                       ? '1px solid rgba(250,204,21,0.9)'
                       : darkMode
-                        ? '1px solid rgba(55,65,81,1)'
-                        : '1px solid rgba(209,213,219,1)',
+                      ? '1px solid rgba(55,65,81,1)'
+                      : '1px solid rgba(209,213,219,1)',
                   background: darkMode ? '#020617' : '#f9fafb'
                 }}
               >
@@ -1594,8 +1642,8 @@ function App() {
                       plan === 'basic'
                         ? 'linear-gradient(135deg,#fbbf24,#f97316)'
                         : darkMode
-                          ? '#111827'
-                          : '#e5e7eb',
+                        ? '#111827'
+                        : '#e5e7eb',
                     color: plan === 'basic' ? '#111827' : darkMode ? '#e5e7eb' : '#111827',
                     fontSize: 13,
                     fontWeight: 600,
@@ -1615,8 +1663,8 @@ function App() {
                     plan === 'pro'
                       ? '1px solid rgba(250,204,21,0.9)'
                       : darkMode
-                        ? '1px solid rgba(55,65,81,1)'
-                        : '1px solid rgba(209,213,219,1)',
+                      ? '1px solid rgba(55,65,81,1)'
+                      : '1px solid rgba(209,213,219,1)',
                   background: darkMode
                     ? 'radial-gradient(circle at top, #111827, #020617)'
                     : '#fff7ed',
@@ -1679,8 +1727,8 @@ function App() {
                     plan === 'enterprise'
                       ? '1px solid rgba(250,204,21,0.9)'
                       : darkMode
-                        ? '1px solid rgba(55,65,81,1)'
-                        : '1px solid rgba(209,213,219,1)',
+                      ? '1px solid rgba(55,65,81,1)'
+                      : '1px solid rgba(209,213,219,1)',
                   background: darkMode ? '#020617' : '#f9fafb'
                 }}
               >
