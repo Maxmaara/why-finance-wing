@@ -18,7 +18,7 @@ function App() {
 
   const [showProfileMenu, setShowProfileMenu] = useState(false);
 
-  // auth
+  // auth / profile
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState('create');
   const [authEmail, setAuthEmail] = useState('');
@@ -26,9 +26,33 @@ function App() {
   const [authOtp, setAuthOtp] = useState('');
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profileUsername, setProfileUsername] = useState('');
+  const [isUpdatingPlan, setIsUpdatingPlan] = useState(false);
 
-  // plan modal
-  const [showPlanModal, setShowPlanModal] = useState(false);
+  // load user from localStorage, fallback to dev user
+  const [user, setUser] = useState(() => {
+    const raw = window.localStorage.getItem('why_user');
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (!parsed.plan) {
+          parsed.plan = 'basic';
+        }
+        return parsed;
+      } catch {}
+    }
+    // TEMP dev user (no OTP needed)
+    return {
+      id: 'dev-user',
+      email: 'dev@example.com',
+      username: 'Dev user',
+      isVerified: true,
+      plan: 'basic'
+    };
+  });
+
+  const effectivePlan = user?.plan || 'basic';
+  const isFreePlan = effectivePlan === 'basic';
+  const lockedTabsInBasic = ['zakath', 'investments', 'loans', 'split'];
 
   // main accounts
   const [accounts, setAccounts] = useState(() => {
@@ -117,43 +141,6 @@ function App() {
     return () => clearTimeout(t);
   }, []);
 
-  // load user from localStorage (with fallback dev user)
-  const [user, setUser] = useState(() => {
-    const raw = window.localStorage.getItem('why_user');
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw);
-        return {
-          ...parsed,
-          plan: parsed.plan || 'basic'
-        };
-      } catch {}
-    }
-    // TEMP dev user (no OTP needed, local only)
-    return {
-      id: 'dev-user',
-      email: 'dev@example.com',
-      username: 'Dev user',
-      isVerified: true,
-      plan: 'basic',
-      planSince: Date.now()
-    };
-  });
-
-  const plan = user?.plan || 'basic';
-  const isProOrEnterprise = plan === 'pro' || plan === 'enterprise';
-  const advancedTabs = ['zakath', 'investments', 'loans', 'split'];
-  const isAdvancedActive = advancedTabs.includes(activeTab);
-  const canAccessActiveTab = !isAdvancedActive || isProOrEnterprise;
-
-  // If user is on Basic and currently viewing a locked tab, push back to overview
-  useEffect(() => {
-    if (!isProOrEnterprise && advancedTabs.includes(activeTab)) {
-      setActiveTab('overview');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan]);
-
   // fetch transactions (per user)
   useEffect(() => {
     if (!user) {
@@ -186,22 +173,17 @@ function App() {
     return { ...acc, income: inc, expense: exp, net: inc - exp };
   });
 
-  const allSelectableAccounts = [
-    ...accounts,
-    ...savingsAccounts.map((s) => ({ ...s, type: 'savings' }))
-  ];
+  const allSelectableAccounts = [...accounts, ...savingsAccounts.map((s) => ({ ...s, type: 'savings' }))];
 
   // accounts
   const onAddAccount = () => {
-    const bankCount = accounts.filter((a) => a.type === 'bank').length;
-
-    // BASIC LIMIT: max 2 bank accounts (Main Bank + 1 more)
-    if (plan === 'basic' && bankCount >= 2) {
-      alert(
-        'On the Basic plan you can have up to 2 bank accounts.\nUpgrade to Pro for unlimited accounts.'
-      );
-      setShowPlanModal(true);
-      return;
+    // Basic plan limit: max 2 bank accounts (plus mandatory cash)
+    if (isFreePlan) {
+      const bankCount = accounts.filter((a) => a.type === 'bank').length;
+      if (bankCount >= 2) {
+        alert('Basic plan allows up to 2 bank accounts. Upgrade to Pro for unlimited bank accounts.');
+        return;
+      }
     }
 
     const name = window.prompt('Account name?');
@@ -224,25 +206,19 @@ function App() {
     if (!newName) return;
     const newCurr = window.prompt('Currency', acc.currency) || acc.currency;
     setAccounts((prev) =>
-      prev.map((a) =>
-        a.id === acc.id
-          ? { ...a, name: newName.trim(), currency: newCurr.trim().toUpperCase() }
-          : a
-      )
+      prev.map((a) => (a.id === acc.id ? { ...a, name: newName.trim(), currency: newCurr.trim().toUpperCase() } : a))
     );
   };
 
   const onDeleteAccount = (acc) => {
     if (acc.mandatory) return alert('Cannot delete mandatory account.');
     const bankCount = accounts.filter((a) => a.type === 'bank').length;
-    if (acc.type === 'bank' && bankCount <= 1) {
-      return alert('At least one bank must remain.');
-    }
+    if (acc.type === 'bank' && bankCount <= 1) return alert('At least one bank must remain.');
     if (!window.confirm(`Delete account "${acc.name}"?`)) return;
     setAccounts((prev) => prev.filter((a) => a.id !== acc.id));
   };
 
-  // savings
+  // savings (unlimited even on Basic)
   const onAddSavings = () => {
     const name = window.prompt('Savings name?');
     if (!name) return;
@@ -264,11 +240,7 @@ function App() {
     if (!newName) return;
     const newCurr = window.prompt('Currency', acc.currency) || acc.currency;
     setSavingsAccounts((prev) =>
-      prev.map((a) =>
-        a.id === acc.id
-          ? { ...a, name: newName.trim(), currency: newCurr.trim().toUpperCase() }
-          : a
-      )
+      prev.map((a) => (a.id === acc.id ? { ...a, name: newName.trim(), currency: newCurr.trim().toUpperCase() } : a))
     );
   };
 
@@ -348,30 +320,24 @@ function App() {
         accountId: toId
       };
 
-      const r1 = await fetch(
-        'https://why-finance-wing-server.onrender.com/api/transactions',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-user-id': user.id
-          },
-          body: JSON.stringify(out)
-        }
-      );
+      const r1 = await fetch('https://why-finance-wing-server.onrender.com/api/transactions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user.id
+        },
+        body: JSON.stringify(out)
+      });
       const newOut = await r1.json();
 
-      const r2 = await fetch(
-        'https://why-finance-wing-server.onrender.com/api/transactions',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-user-id': user.id
-          },
-          body: JSON.stringify(inc)
-        }
-      );
+      const r2 = await fetch('https://why-finance-wing-server.onrender.com/api/transactions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user.id
+        },
+        body: JSON.stringify(inc)
+      });
       const newIn = await r2.json();
 
       setTransactions((prev) => [...prev, newOut, newIn]);
@@ -391,31 +357,25 @@ function App() {
     };
 
     if (form.id) {
-      const r = await fetch(
-        `https://why-finance-wing-server.onrender.com/api/transactions/${form.id}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-user-id': user.id
-          },
-          body: JSON.stringify(body)
-        }
-      );
+      const r = await fetch(`https://why-finance-wing-server.onrender.com/api/transactions/${form.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user.id
+        },
+        body: JSON.stringify(body)
+      });
       const updated = await r.json();
       setTransactions((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
     } else {
-      const r = await fetch(
-        'https://why-finance-wing-server.onrender.com/api/transactions',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-user-id': user.id
-          },
-          body: JSON.stringify(body)
-        }
-      );
+      const r = await fetch('https://why-finance-wing-server.onrender.com/api/transactions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user.id
+        },
+        body: JSON.stringify(body)
+      });
       const newTx = await r.json();
       setTransactions((prev) => [...prev, newTx]);
     }
@@ -479,19 +439,15 @@ function App() {
   const verifyOtp = async (e) => {
     e.preventDefault();
     if (!authEmail || !authOtp) return;
-    const r = await fetch(
-      'https://why-finance-wing-server.onrender.com/api/users/verify-otp',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: authEmail, otp: authOtp })
-      }
-    );
+    const r = await fetch('https://why-finance-wing-server.onrender.com/api/users/verify-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: authEmail, otp: authOtp })
+    });
     if (!r.ok) return;
     const u = await r.json();
-    const normalized = { ...u, plan: u.plan || 'basic' };
-    setUser(normalized);
-    window.localStorage.setItem('why_user', JSON.stringify(normalized));
+    setUser(u);
+    window.localStorage.setItem('why_user', JSON.stringify(u));
     setShowAuthModal(false);
   };
 
@@ -504,19 +460,15 @@ function App() {
   const saveProfile = async (e) => {
     e.preventDefault();
     if (!user) return;
-    const r = await fetch(
-      'https://why-finance-wing-server.onrender.com/api/users/update-profile',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: user.email, username: profileUsername })
-      }
-    );
+    const r = await fetch('https://why-finance-wing-server.onrender.com/api/users/update-profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: user.email, username: profileUsername })
+    });
     if (!r.ok) return;
     const updated = await r.json();
-    const normalized = { ...updated, plan: updated.plan || 'basic' };
-    setUser(normalized);
-    window.localStorage.setItem('why_user', JSON.stringify(normalized));
+    setUser(updated);
+    window.localStorage.setItem('why_user', JSON.stringify(updated));
     setShowProfileModal(false);
   };
 
@@ -527,46 +479,43 @@ function App() {
     setTransactions([]);
   };
 
-  const handleSelectPlan = async (planId) => {
+  // plan selection (calls backend)
+  const selectPlan = async (planId) => {
     if (!user) {
-      alert('Please login first.');
+      alert('Please login to choose a plan.');
       return;
     }
 
-    // Dev user: just update locally
-    if (user.id === 'dev-user') {
-      const updated = { ...user, plan: planId, planSince: Date.now() };
+    // dev user: just update locally, no API
+    if (user.email === 'dev@example.com') {
+      const updated = { ...user, plan: planId };
       setUser(updated);
       window.localStorage.setItem('why_user', JSON.stringify(updated));
-      setShowPlanModal(false);
       return;
     }
 
+    setIsUpdatingPlan(true);
     try {
-      const res = await fetch(
-        'https://why-finance-wing-server.onrender.com/api/users/select-plan',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: user.email, plan: planId })
-        }
-      );
-      if (!res.ok) {
+      const r = await fetch('https://why-finance-wing-server.onrender.com/api/users/select-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user.email, plan: planId })
+      });
+      if (!r.ok) {
         alert('Could not update plan. Please try again.');
         return;
       }
-      const updated = await res.json();
-      const normalized = { ...updated, plan: updated.plan || 'basic' };
-      setUser(normalized);
-      window.localStorage.setItem('why_user', JSON.stringify(normalized));
-      setShowPlanModal(false);
+      const updated = await r.json();
+      setUser(updated);
+      window.localStorage.setItem('why_user', JSON.stringify(updated));
     } catch (err) {
-      console.error(err);
-      alert('Network error updating plan.');
+      alert('Network error while updating plan.');
+    } finally {
+      setIsUpdatingPlan(false);
     }
   };
 
-  const welcomeName = user ? user.username || user.email : 'Guest';
+  const welcomeName = user ? (user.username || user.email) : 'Guest';
 
   const tabs = [
     { id: 'overview', label: 'Overview' },
@@ -576,13 +525,6 @@ function App() {
     { id: 'loans', label: 'Loans' },
     { id: 'split', label: 'Split' }
   ];
-
-  const currentPlanLabel =
-    plan === 'basic'
-      ? 'Basic · Free'
-      : plan === 'pro'
-      ? 'Pro · $4.99/mo'
-      : 'Enterprise · Custom';
 
   // loading screen
   if (loading) {
@@ -594,15 +536,7 @@ function App() {
             font-family: system-ui;
           }
         `}</style>
-        <div
-          style={{
-            minHeight: '100vh',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 24
-          }}
-        >
+        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
           <div
             style={{
               maxWidth: 720,
@@ -610,8 +544,7 @@ function App() {
               borderRadius: 24,
               padding: 32,
               border: '1px solid rgba(248,250,252,0.08)',
-              background:
-                'radial-gradient(circle at top, rgba(15,23,42,0.9), rgba(15,23,42,0.98))',
+              background: 'radial-gradient(circle at top, rgba(15,23,42,0.9), rgba(15,23,42,0.98))',
               boxShadow: '0 24px 60px rgba(0,0,0,0.7)',
               color: '#f9fafb',
               textAlign: 'center',
@@ -642,12 +575,8 @@ function App() {
               <div style={{ fontSize: 20, fontWeight: 600, marginBottom: 8, color: '#facc15' }}>
                 “Charity does not decrease wealth.”
               </div>
-              <div style={{ fontSize: 14, color: '#e5e7eb', marginBottom: 24 }}>
-                — Prophet Muhammad ﷺ
-              </div>
-              <div style={{ fontSize: 13, color: '#9ca3af' }}>
-                Loading Why? Community · Budget Tracker...
-              </div>
+              <div style={{ fontSize: 14, color: '#e5e7eb', marginBottom: 24 }}>— Prophet Muhammad ﷺ</div>
+              <div style={{ fontSize: 13, color: '#9ca3af' }}>Loading Why? Community · Budget Tracker...</div>
             </div>
           </div>
         </div>
@@ -683,14 +612,7 @@ function App() {
         }
       `}</style>
 
-      <div
-        style={{
-          minHeight: '100vh',
-          display: 'flex',
-          justifyContent: 'center',
-          padding: '16px 8px'
-        }}
-      >
+      <div style={{ minHeight: '100vh', display: 'flex', justifyContent: 'center', padding: '16px 8px' }}>
         <div
           style={{
             width: '100%',
@@ -698,12 +620,8 @@ function App() {
             borderRadius: 24,
             padding: 20,
             background: darkMode ? 'rgba(15,23,42,0.96)' : 'rgba(255,255,255,0.96)',
-            boxShadow: darkMode
-              ? '0 24px 60px rgba(0,0,0,0.65)'
-              : '0 18px 45px rgba(15,23,42,0.18)',
-            border: darkMode
-              ? '1px solid rgba(30,64,175,0.8)'
-              : '1px solid rgba(209,213,219,0.9)',
+            boxShadow: darkMode ? '0 24px 60px rgba(0,0,0,0.65)' : '0 18px 45px rgba(15,23,42,0.18)',
+            border: darkMode ? '1px solid rgba(30,64,175,0.8)' : '1px solid rgba(209,213,219,0.9)',
             color: darkMode ? '#f9fafb' : '#111827',
             display: 'flex',
             flexDirection: 'column',
@@ -717,9 +635,7 @@ function App() {
               alignItems: 'center',
               justifyContent: 'space-between',
               padding: '4px 4px 12px',
-              borderBottom: darkMode
-                ? '1px solid rgba(31,41,55,0.9)'
-                : '1px solid rgba(229,231,235,0.9)',
+              borderBottom: darkMode ? '1px solid rgba(31,41,55,0.9)' : '1px solid rgba(229,231,235,0.9)',
               marginBottom: 10
             }}
           >
@@ -752,25 +668,9 @@ function App() {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'flex-end'
-                }}
-              >
-                <span style={{ fontSize: 12, color: darkMode ? '#9ca3af' : '#6b7280' }}>
-                  Welcome, {welcomeName}
-                </span>
-                <span
-                  style={{
-                    fontSize: 10,
-                    color: darkMode ? '#6b7280' : '#9ca3af'
-                  }}
-                >
-                  {currentPlanLabel}
-                </span>
-              </div>
+              <span style={{ fontSize: 12, color: darkMode ? '#9ca3af' : '#6b7280' }}>
+                Welcome, {welcomeName} · {effectivePlan === 'basic' ? 'Basic' : effectivePlan === 'pro' ? 'Pro' : 'Enterprise'}
+              </span>
 
               {/* dark mode toggle */}
               <button
@@ -792,9 +692,7 @@ function App() {
                     inset: 2,
                     borderRadius: 999,
                     background: darkMode ? '#020617' : '#e5e7eb',
-                    boxShadow: darkMode
-                      ? '0 0 0 1px rgba(75,85,99,0.9)'
-                      : '0 0 0 1px rgba(209,213,219,1)',
+                    boxShadow: darkMode ? '0 0 0 1px rgba(75,85,99,0.9)' : '0 0 0 1px rgba(209,213,219,1)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -868,7 +766,7 @@ function App() {
                       position: 'absolute',
                       right: 0,
                       marginTop: 6,
-                      minWidth: 180,
+                      minWidth: 210,
                       borderRadius: 12,
                       background: darkMode ? '#020617' : '#ffffff',
                       boxShadow: '0 18px 40px rgba(15,23,42,0.55)',
@@ -877,22 +775,6 @@ function App() {
                       zIndex: 10
                     }}
                   >
-                    {user && (
-                      <div
-                        style={{
-                          padding: '6px 10px 4px',
-                          fontSize: 11,
-                          color: darkMode ? '#9ca3af' : '#6b7280',
-                          borderBottom: darkMode
-                            ? '1px solid rgba(31,41,55,0.9)'
-                            : '1px solid rgba(229,231,235,0.9)',
-                          marginBottom: 4
-                        }}
-                      >
-                        <div>Plan: {currentPlanLabel}</div>
-                      </div>
-                    )}
-
                     {!user && (
                       <>
                         <button
@@ -957,31 +839,6 @@ function App() {
                         >
                           Profile
                         </button>
-
-                        <button
-                          onClick={() => {
-                            setShowProfileMenu(false);
-                            setShowPlanModal(true);
-                          }}
-                          className="profile-menu-item"
-                          style={{
-                            width: '100%',
-                            textAlign: 'left',
-                            padding: '6px 10px',
-                            borderRadius: 8,
-                            border: 'none',
-                            background: 'transparent',
-                            cursor: 'pointer',
-                            color: '#22c55e',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center'
-                          }}
-                        >
-                          <span>Plans &amp; billing</span>
-                          <span style={{ fontSize: 11 }}>⚙︎</span>
-                        </button>
-
                         <button
                           onClick={logout}
                           className="profile-menu-item"
@@ -998,6 +855,81 @@ function App() {
                         >
                           Logout
                         </button>
+
+                        {/* PLAN PICKER (Style A inside dropdown) */}
+                        <div
+                          style={{
+                            marginTop: 6,
+                            paddingTop: 6,
+                            borderTop: darkMode
+                              ? '1px solid rgba(31,41,55,0.9)'
+                              : '1px solid rgba(229,231,235,0.9)'
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: 11,
+                              marginBottom: 4,
+                              color: darkMode ? '#9ca3af' : '#6b7280'
+                            }}
+                          >
+                            Plan
+                          </div>
+                          {[
+                            { id: 'basic', label: 'Basic · Free' },
+                            { id: 'pro', label: 'Pro · $4.99 / month' },
+                            { id: 'enterprise', label: 'Enterprise · Contact sales' }
+                          ].map((p) => {
+                            const isActive = effectivePlan === p.id;
+                            return (
+                              <button
+                                key={p.id}
+                                type="button"
+                                onClick={() => {
+                                  if (isActive || isUpdatingPlan) return;
+                                  selectPlan(p.id);
+                                }}
+                                style={{
+                                  width: '100%',
+                                  textAlign: 'left',
+                                  padding: '6px 10px',
+                                  borderRadius: 8,
+                                  border: 'none',
+                                  marginBottom: 4,
+                                  cursor: isUpdatingPlan ? 'default' : 'pointer',
+                                  fontSize: 12,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  background: isActive
+                                    ? 'linear-gradient(135deg,#fbbf24,#f97316)'
+                                    : darkMode
+                                      ? '#020617'
+                                      : '#f9fafb',
+                                  color: isActive ? '#111827' : darkMode ? '#e5e7eb' : '#111827',
+                                  boxShadow: isActive ? '0 10px 20px rgba(249,115,22,0.35)' : 'none',
+                                  opacity: isUpdatingPlan && !isActive ? 0.6 : 1
+                                }}
+                              >
+                                <span>{p.label}</span>
+                                <span style={{ fontSize: 11 }}>
+                                  {isActive ? 'Current' : 'Choose'}
+                                </span>
+                              </button>
+                            );
+                          })}
+                          {isFreePlan && (
+                            <div
+                              style={{
+                                fontSize: 10,
+                                color: darkMode ? '#9ca3af' : '#6b7280',
+                                marginTop: 2
+                              }}
+                            >
+                              Basic: up to 2 bank accounts + Cash, unlimited savings, Overview & Transactions only.
+                            </div>
+                          )}
+                        </div>
                       </>
                     )}
                   </div>
@@ -1007,14 +939,7 @@ function App() {
           </header>
 
           {/* MAIN SCROLL AREA */}
-          <div
-            style={{
-              flex: 1,
-              overflowY: 'auto',
-              paddingRight: 4,
-              paddingBottom: 8
-            }}
-          >
+          <div style={{ flex: 1, overflowY: 'auto', paddingRight: 4, paddingBottom: 8 }}>
             <div
               style={{
                 marginBottom: 10,
@@ -1048,19 +973,23 @@ function App() {
               style={{
                 display: 'flex',
                 gap: 8,
-                borderBottom: darkMode
-                  ? '1px solid rgba(31,41,55,0.9)'
-                  : '1px solid rgba(229,231,235,0.9)',
+                borderBottom: darkMode ? '1px solid rgba(31,41,55,0.9)' : '1px solid rgba(229,231,235,0.9)',
                 marginBottom: 12
               }}
             >
               {tabs.map((t) => {
-                const isLocked = plan === 'basic' && advancedTabs.includes(t.id);
+                const isLocked = isFreePlan && lockedTabsInBasic.includes(t.id);
                 const isActive = activeTab === t.id;
                 return (
                   <button
                     key={t.id}
-                    onClick={() => setActiveTab(t.id)}
+                    onClick={() => {
+                      if (isLocked) {
+                        alert('Upgrade to Pro to unlock this tab.');
+                        return;
+                      }
+                      setActiveTab(t.id);
+                    }}
                     style={{
                       padding: '6px 12px',
                       borderRadius: 999,
@@ -1068,28 +997,20 @@ function App() {
                       cursor: 'pointer',
                       fontSize: 12,
                       fontWeight: 500,
-                      background:
-                        isActive && !isLocked
-                          ? 'linear-gradient(135deg,#fbbf24,#f97316)'
-                          : 'transparent',
-                      color: isLocked
-                        ? darkMode
-                          ? '#4b5563'
-                          : '#9ca3af'
-                        : isActive
+                      background: isActive
+                        ? 'linear-gradient(135deg,#fbbf24,#f97316)'
+                        : 'transparent',
+                      color: isActive
                         ? '#111827'
                         : darkMode
-                        ? '#9ca3af'
-                        : '#6b7280',
-                      boxShadow:
-                        isActive && !isLocked
-                          ? '0 10px 20px rgba(249,115,22,0.45)'
-                          : 'none',
+                          ? '#9ca3af'
+                          : '#6b7280',
+                      boxShadow: isActive ? '0 10px 20px rgba(249,115,22,0.45)' : 'none',
                       marginBottom: -1,
+                      opacity: isLocked && !isActive ? 0.45 : 1,
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 4,
-                      opacity: isLocked ? 0.7 : 1
+                      gap: 4
                     }}
                   >
                     {t.label}
@@ -1100,124 +1021,61 @@ function App() {
             </div>
 
             {/* TAB CONTENT */}
-            {!canAccessActiveTab && isAdvancedActive ? (
-              <div
-                style={{
-                  borderRadius: 16,
-                  padding: 20,
-                  border: darkMode
-                    ? '1px dashed rgba(55,65,81,1)'
-                    : '1px dashed rgba(209,213,219,1)',
-                  background: darkMode ? 'rgba(15,23,42,0.85)' : '#f9fafb',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 10
-                }}
-              >
-                <div style={{ fontSize: 16, fontWeight: 600 }}>
-                  Unlock {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} tab
-                </div>
-                <div style={{ fontSize: 13, color: darkMode ? '#9ca3af' : '#6b7280' }}>
-                  This feature is available on the Pro and Enterprise plans.
-                  Basic users can still use bank accounts, savings, and transactions.
-                </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button
-                    onClick={() => setShowPlanModal(true)}
-                    style={{
-                      padding: '8px 14px',
-                      borderRadius: 999,
-                      border: 'none',
-                      background: 'linear-gradient(135deg,#fbbf24,#f97316)',
-                      color: '#111827',
-                      fontSize: 13,
-                      fontWeight: 600,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Upgrade to Pro – $4.99/mo
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('overview')}
-                    style={{
-                      padding: '8px 14px',
-                      borderRadius: 999,
-                      border: 'none',
-                      background: darkMode ? '#0f172a' : '#e5e7eb',
-                      color: darkMode ? '#e5e7eb' : '#111827',
-                      fontSize: 13,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Back to Overview
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <>
-                {activeTab === 'overview' && (
-                  <OverviewTab
-                    darkMode={darkMode}
-                    mustard={mustard}
-                    accounts={accounts}
-                    savingsAccounts={savingsAccounts}
-                    accountBalances={accountBalances}
-                    savingsBalances={savingsBalances}
-                    accountEditMode={accountEditMode}
-                    setAccountEditMode={setAccountEditMode}
-                    savingsEditMode={savingsEditMode}
-                    setSavingsEditMode={setSavingsEditMode}
-                    onAddAccount={onAddAccount}
-                    onEditAccount={onEditAccount}
-                    onDeleteAccount={onDeleteAccount}
-                    onAddSavings={onAddSavings}
-                    onEditSavings={onEditSavings}
-                    onDeleteSavings={onDeleteSavings}
-                    incomeCategories={incomeCategories}
-                    expenseCategories={expenseCategories}
-                    transactions={transactions}
-                  />
-                )}
-
-                {activeTab === 'transactions' && (
-                  <TransactionsTab
-                    darkMode={darkMode}
-                    transactions={transactions}
-                    accounts={allSelectableAccounts}
-                    collapsedMonths={collapsedMonths}
-                    toggleMonthCollapse={toggleMonthCollapse}
-                    onEditTx={onEditTx}
-                    onDeleteTx={onDeleteTx}
-                    form={form}
-                    setForm={setForm}
-                    handleSubmitTx={handleSubmitTx}
-                    resetForm={resetForm}
-                    incomeCategories={incomeCategories}
-                    expenseCategories={expenseCategories}
-                    addCategory={addCategory}
-                    removeCategory={removeCategory}
-                  />
-                )}
-
-                {activeTab === 'zakath' && (
-                  <ZakathTab darkMode={darkMode} mustard={mustard} />
-                )}
-                {activeTab === 'investments' && (
-                  <InvestmentsTab darkMode={darkMode} mustard={mustard} />
-                )}
-                {activeTab === 'loans' && <LoansTab darkMode={darkMode} mustard={mustard} />}
-                {activeTab === 'split' && <SplitTab darkMode={darkMode} mustard={mustard} />}
-              </>
+            {activeTab === 'overview' && (
+              <OverviewTab
+                darkMode={darkMode}
+                mustard={mustard}
+                accounts={accounts}
+                savingsAccounts={savingsAccounts}
+                accountBalances={accountBalances}
+                savingsBalances={savingsBalances}
+                accountEditMode={accountEditMode}
+                setAccountEditMode={setAccountEditMode}
+                savingsEditMode={savingsEditMode}
+                setSavingsEditMode={setSavingsEditMode}
+                onAddAccount={onAddAccount}
+                onEditAccount={onEditAccount}
+                onDeleteAccount={onDeleteAccount}
+                onAddSavings={onAddSavings}
+                onEditSavings={onEditSavings}
+                onDeleteSavings={onDeleteSavings}
+                incomeCategories={incomeCategories}
+                expenseCategories={expenseCategories}
+                transactions={transactions}
+              />
             )}
+
+            {activeTab === 'transactions' && (
+              <TransactionsTab
+                darkMode={darkMode}
+                transactions={transactions}
+                accounts={allSelectableAccounts}
+                collapsedMonths={collapsedMonths}
+                toggleMonthCollapse={toggleMonthCollapse}
+                onEditTx={onEditTx}
+                onDeleteTx={onDeleteTx}
+                form={form}
+                setForm={setForm}
+                handleSubmitTx={handleSubmitTx}
+                resetForm={resetForm}
+                incomeCategories={incomeCategories}
+                expenseCategories={expenseCategories}
+                addCategory={addCategory}
+                removeCategory={removeCategory}
+              />
+            )}
+
+            {activeTab === 'zakath' && <ZakathTab darkMode={darkMode} mustard={mustard} />}
+            {activeTab === 'investments' && <InvestmentsTab darkMode={darkMode} mustard={mustard} />}
+            {activeTab === 'loans' && <LoansTab darkMode={darkMode} mustard={mustard} />}
+            {activeTab === 'split' && <SplitTab darkMode={darkMode} mustard={mustard} />}
           </div>
 
           {/* FOOTER */}
           <footer
             style={{
               paddingTop: 8,
-              borderTop: darkMode
-                ? '1px solid rgba(31,41,55,0.9)'
-                : '1px solid rgba(229,231,235,0.9)',
+              borderTop: darkMode ? '1px solid rgba(31,41,55,0.9)' : '1px solid rgba(229,231,235,0.9)',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
@@ -1439,22 +1297,14 @@ function App() {
             </div>
 
             {user && (
-              <div
-                style={{
-                  fontSize: 12,
-                  color: darkMode ? '#9ca3af' : '#6b7280',
-                  marginBottom: 8
-                }}
-              >
+              <div style={{ fontSize: 12, color: darkMode ? '#9ca3af' : '#6b7280', marginBottom: 8 }}>
                 Email: {user.email}
               </div>
             )}
 
             <form onSubmit={saveProfile} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <label style={{ fontSize: 12, marginBottom: 2, color: '#6b7280' }}>
-                  Username (optional)
-                </label>
+                <label style={{ fontSize: 12, marginBottom: 2, color: '#6b7280' }}>Username (optional)</label>
                 <input
                   value={profileUsername}
                   onChange={(e) => setProfileUsername(e.target.value)}
@@ -1468,14 +1318,7 @@ function App() {
                 />
               </div>
 
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'flex-end',
-                  gap: 8,
-                  marginTop: 6
-                }}
-              >
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 6 }}>
                 <button
                   type="button"
                   onClick={() => setShowProfileModal(false)}
@@ -1507,228 +1350,6 @@ function App() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* PLAN MODAL */}
-      {showPlanModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15,23,42,0.7)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 40
-          }}
-          onClick={() => setShowPlanModal(false)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              width: '100%',
-              maxWidth: 640,
-              borderRadius: 20,
-              padding: 20,
-              background: darkMode ? '#020617' : '#ffffff',
-              color: darkMode ? '#f9fafb' : '#111827',
-              boxShadow: '0 24px 60px rgba(0,0,0,0.8)',
-              border: darkMode ? '1px solid rgba(55,65,81,0.9)' : '1px solid rgba(209,213,219,1)'
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: 12
-              }}
-            >
-              <div style={{ fontSize: 16, fontWeight: 600 }}>Choose your plan</div>
-              <button
-                onClick={() => setShowPlanModal(false)}
-                style={{
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  fontSize: 18,
-                  color: darkMode ? '#9ca3af' : '#6b7280'
-                }}
-              >
-                ×
-              </button>
-            </div>
-
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                gap: 12
-              }}
-            >
-              {/* BASIC */}
-              <div
-                style={{
-                  borderRadius: 16,
-                  padding: 14,
-                  border:
-                    plan === 'basic'
-                      ? '1px solid rgba(250,204,21,0.9)'
-                      : darkMode
-                      ? '1px solid rgba(55,65,81,1)'
-                      : '1px solid rgba(209,213,219,1)',
-                  background: darkMode ? '#020617' : '#f9fafb'
-                }}
-              >
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Basic</div>
-                <div style={{ fontSize: 11, color: darkMode ? '#9ca3af' : '#6b7280' }}>
-                  Free · up to 2 bank accounts + Cash. Transactions only.
-                </div>
-                <div style={{ fontSize: 18, fontWeight: 700, marginTop: 8 }}>$0</div>
-                <ul style={{ fontSize: 11, marginTop: 8, paddingLeft: 14 }}>
-                  <li>Up to 2 bank accounts + Cash</li>
-                  <li>Unlimited savings accounts</li>
-                  <li>Transactions tab only</li>
-                  <li>Overview dashboard</li>
-                </ul>
-                <button
-                  onClick={() => handleSelectPlan('basic')}
-                  style={{
-                    marginTop: 10,
-                    width: '100%',
-                    padding: '8px 10px',
-                    borderRadius: 999,
-                    border: 'none',
-                    background:
-                      plan === 'basic'
-                        ? 'linear-gradient(135deg,#fbbf24,#f97316)'
-                        : darkMode
-                        ? '#111827'
-                        : '#e5e7eb',
-                    color: plan === 'basic' ? '#111827' : darkMode ? '#e5e7eb' : '#111827',
-                    fontSize: 13,
-                    fontWeight: 600,
-                    cursor: 'pointer'
-                  }}
-                >
-                  {plan === 'basic' ? 'Current plan' : 'Switch to Basic'}
-                </button>
-              </div>
-
-              {/* PRO */}
-              <div
-                style={{
-                  borderRadius: 16,
-                  padding: 14,
-                  border:
-                    plan === 'pro'
-                      ? '1px solid rgba(250,204,21,0.9)'
-                      : darkMode
-                      ? '1px solid rgba(55,65,81,1)'
-                      : '1px solid rgba(209,213,219,1)',
-                  background: darkMode
-                    ? 'radial-gradient(circle at top, #111827, #020617)'
-                    : '#fff7ed',
-                  boxShadow:
-                    plan === 'pro'
-                      ? '0 18px 40px rgba(249,115,22,0.4)'
-                      : 'none'
-                }}
-              >
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
-                  Pro
-                  <span
-                    style={{
-                      marginLeft: 6,
-                      fontSize: 10,
-                      padding: '2px 6px',
-                      borderRadius: 999,
-                      background: 'rgba(250,204,21,0.15)',
-                      border: '1px solid rgba(250,204,21,0.4)'
-                    }}
-                  >
-                    Recommended
-                  </span>
-                </div>
-                <div style={{ fontSize: 11, color: darkMode ? '#e5e7eb' : '#6b7280' }}>
-                  Everything unlimited. All tabs unlocked.
-                </div>
-                <div style={{ fontSize: 18, fontWeight: 700, marginTop: 8 }}>$4.99 / month</div>
-                <ul style={{ fontSize: 11, marginTop: 8, paddingLeft: 14 }}>
-                  <li>Unlimited bank accounts</li>
-                  <li>Unlimited savings accounts</li>
-                  <li>All tabs: Zakath, Investments, Loans, Split</li>
-                  <li>Priority feature access</li>
-                </ul>
-                <button
-                  onClick={() => handleSelectPlan('pro')}
-                  style={{
-                    marginTop: 10,
-                    width: '100%',
-                    padding: '8px 10px',
-                    borderRadius: 999,
-                    border: 'none',
-                    background: 'linear-gradient(135deg,#fbbf24,#f97316)',
-                    color: '#111827',
-                    fontSize: 13,
-                    fontWeight: 600,
-                    cursor: 'pointer'
-                  }}
-                >
-                  {plan === 'pro' ? 'Current plan' : 'Upgrade to Pro'}
-                </button>
-              </div>
-
-              {/* ENTERPRISE */}
-              <div
-                style={{
-                  borderRadius: 16,
-                  padding: 14,
-                  border:
-                    plan === 'enterprise'
-                      ? '1px solid rgba(250,204,21,0.9)'
-                      : darkMode
-                      ? '1px solid rgba(55,65,81,1)'
-                      : '1px solid rgba(209,213,219,1)',
-                  background: darkMode ? '#020617' : '#f9fafb'
-                }}
-              >
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
-                  Enterprise
-                </div>
-                <div style={{ fontSize: 11, color: darkMode ? '#9ca3af' : '#6b7280' }}>
-                  For families, small businesses or custom needs.
-                </div>
-                <div style={{ fontSize: 18, fontWeight: 700, marginTop: 8 }}>Contact sales</div>
-                <ul style={{ fontSize: 11, marginTop: 8, paddingLeft: 14 }}>
-                  <li>Everything in Pro</li>
-                  <li>Custom limits and reporting</li>
-                  <li>Priority support (future)</li>
-                </ul>
-                <button
-                  onClick={() => {
-                    handleSelectPlan('enterprise');
-                    // later: open contact form
-                  }}
-                  style={{
-                    marginTop: 10,
-                    width: '100%',
-                    padding: '8px 10px',
-                    borderRadius: 999,
-                    border: 'none',
-                    background: darkMode ? '#111827' : '#e5e7eb',
-                    color: darkMode ? '#e5e7eb' : '#111827',
-                    fontSize: 13,
-                    fontWeight: 600,
-                    cursor: 'pointer'
-                  }}
-                >
-                  {plan === 'enterprise' ? 'Current plan' : 'Talk to us'}
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       )}
