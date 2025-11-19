@@ -36,7 +36,7 @@ function App() {
     if (stored) {
       try {
         return JSON.parse(stored);
-      } catch {}
+      } catch { }
     }
     return [
       { id: 'acc-bank-1', name: 'Main Bank', currency: 'AED', type: 'bank', mandatory: true },
@@ -50,7 +50,7 @@ function App() {
     if (stored) {
       try {
         return JSON.parse(stored);
-      } catch {}
+      } catch { }
     }
     return [];
   });
@@ -69,7 +69,7 @@ function App() {
     if (stored) {
       try {
         return JSON.parse(stored);
-      } catch {}
+      } catch { }
     }
     return ['Salary', 'Bonus', 'Business', 'Other income'];
   });
@@ -79,7 +79,7 @@ function App() {
     if (stored) {
       try {
         return JSON.parse(stored);
-      } catch {}
+      } catch { }
     }
     return ['Rent', 'Groceries', 'Utilities', 'Transport', 'Other expense'];
   });
@@ -117,28 +117,18 @@ function App() {
     return () => clearTimeout(t);
   }, []);
 
-  // load user from localStorage (with fallback dev user)
+  // load user from localStorage (NO MORE DEV USER)
   const [user, setUser] = useState(() => {
     const raw = window.localStorage.getItem('why_user');
     if (raw) {
       try {
         const parsed = JSON.parse(raw);
-        return {
-          ...parsed,
-          plan: parsed.plan || 'basic'
-        };
-      } catch {}
+        return { ...parsed, plan: parsed.plan || 'basic' };
+      } catch { }
     }
-    // TEMP dev user (no OTP needed, local only)
-    return {
-      id: 'dev-user',
-      email: 'dev@example.com',
-      username: 'Dev user',
-      isVerified: true,
-      plan: 'basic',
-      planSince: Date.now()
-    };
+    return null; // ← no auto-login, OTP required
   });
+
 
   const plan = user?.plan || 'basic';
   const isProOrEnterprise = plan === 'pro' || plan === 'enterprise';
@@ -168,7 +158,7 @@ function App() {
     })
       .then((r) => r.json())
       .then(setTransactions)
-      .catch(() => {});
+      .catch(() => { });
   }, [user]);
 
   // derived balances
@@ -581,8 +571,8 @@ function App() {
     plan === 'basic'
       ? 'Basic · Free'
       : plan === 'pro'
-      ? 'Pro · $4.99/mo'
-      : 'Enterprise · Custom';
+        ? 'Pro · $4.99/mo'
+        : 'Enterprise · Custom';
 
   // loading screen
   if (loading) {
@@ -659,11 +649,10 @@ function App() {
     <>
       <style>{`
         body {
-          background: ${
-            darkMode
-              ? 'radial-gradient(circle at top, #0f172a 0, #020617 45%, #000 100%)'
-              : 'radial-gradient(circle at top, #fef3c7 0, #f9fafb 45%, #e5e7eb 100%)'
-          };
+          background: ${darkMode
+          ? 'radial-gradient(circle at top, #0f172a 0, #020617 45%, #000 100%)'
+          : 'radial-gradient(circle at top, #fef3c7 0, #f9fafb 45%, #e5e7eb 100%)'
+        };
         }
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 999px; }
@@ -1077,10 +1066,10 @@ function App() {
                           ? '#4b5563'
                           : '#9ca3af'
                         : isActive
-                        ? '#111827'
-                        : darkMode
-                        ? '#9ca3af'
-                        : '#6b7280',
+                          ? '#111827'
+                          : darkMode
+                            ? '#9ca3af'
+                            : '#6b7280',
                       boxShadow:
                         isActive && !isLocked
                           ? '0 10px 20px rgba(249,115,22,0.45)'
@@ -1577,8 +1566,8 @@ function App() {
                     plan === 'basic'
                       ? '1px solid rgba(250,204,21,0.9)'
                       : darkMode
-                      ? '1px solid rgba(55,65,81,1)'
-                      : '1px solid rgba(209,213,219,1)',
+                        ? '1px solid rgba(55,65,81,1)'
+                        : '1px solid rgba(209,213,219,1)',
                   background: darkMode ? '#020617' : '#f9fafb'
                 }}
               >
@@ -1605,8 +1594,8 @@ function App() {
                       plan === 'basic'
                         ? 'linear-gradient(135deg,#fbbf24,#f97316)'
                         : darkMode
-                        ? '#111827'
-                        : '#e5e7eb',
+                          ? '#111827'
+                          : '#e5e7eb',
                     color: plan === 'basic' ? '#111827' : darkMode ? '#e5e7eb' : '#111827',
                     fontSize: 13,
                     fontWeight: 600,
@@ -1626,8 +1615,8 @@ function App() {
                     plan === 'pro'
                       ? '1px solid rgba(250,204,21,0.9)'
                       : darkMode
-                      ? '1px solid rgba(55,65,81,1)'
-                      : '1px solid rgba(209,213,219,1)',
+                        ? '1px solid rgba(55,65,81,1)'
+                        : '1px solid rgba(209,213,219,1)',
                   background: darkMode
                     ? 'radial-gradient(circle at top, #111827, #020617)'
                     : '#fff7ed',
@@ -1690,8 +1679,8 @@ function App() {
                     plan === 'enterprise'
                       ? '1px solid rgba(250,204,21,0.9)'
                       : darkMode
-                      ? '1px solid rgba(55,65,81,1)'
-                      : '1px solid rgba(209,213,219,1)',
+                        ? '1px solid rgba(55,65,81,1)'
+                        : '1px solid rgba(209,213,219,1)',
                   background: darkMode ? '#020617' : '#f9fafb'
                 }}
               >
