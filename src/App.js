@@ -562,9 +562,19 @@ function App() {
 
   const saveProfile = async (e) => {
     e.preventDefault();
-    // username not really used now; just close
+    if (!user) {
+      setShowProfileModal(false);
+      return;
+    }
+
+    const trimmed = profileUsername.trim();
+    const updated = { ...user, username: trimmed || user.username };
+
+    setUser(updated);
+    window.localStorage.setItem('why_user', JSON.stringify(updated));
     setShowProfileModal(false);
   };
+
 
   const logout = () => {
     setUser(null);
